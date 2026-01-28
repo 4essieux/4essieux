@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>4ESSIEUX | Gestion de Flotte Transport</title>
+  <meta name="description"
+    content="Solution premium de gestion de flotte pour PME du transport routier. Intuitive, rapide et mobile-first." />
+
+  <!-- Core CSS -->
+  <link rel="stylesheet" href="/src/style.css" />
+
+  <!-- Cloak for FOUC protection -->
+  <style>
+    html,
+    body {
+      background-color: #0a0e1a !important;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #app {
+      opacity: 0;
+    }
+  </style>
+
+  <script>
+    // Backup reveal if main script fails or takes too long
+    setTimeout(() => {
+      const app = document.getElementById('app');
+      if (app && app.style.opacity !== '1') {
+        app.style.opacity = '1';
+        app.style.transition = 'opacity 0.5s ease-in';
+      }
+    }, 3000); // Increased backup timeout
+  </script>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#3b82f6" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Modern Date Picker (Flatpickr) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+
+  <!-- Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- WASM Support for Tachograph Parser -->
+  <script src="/wasm_exec.js"></script>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- PDF Generation Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/fr.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <!-- App Shell -->
+    <header id="main-header" class="glass-effect">
+      <div class="header-content">
+        <div class="logo">
+          <span style="font-size: 1.4rem; color: var(--text-primary);">4</span>
+          <span style="font-size: 1.4rem; color: var(--primary-color);">ESSIEUX</span>
+        </div>
+        <div class="user-profile" id="role-selector-trigger" onclick="window.app.toggleRoleModal()">
+          <div class="profile-info">
+            <span class="user-role" id="current-role-label">Chargement...</span>
+          </div>
+          <div class="avatar" id="user-avatar">AD</div>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <div id="initial-loader"
+        style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted);">
+        <div class="loader-spinner"
+          style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;">
+        </div>
+        <p style="margin-top: 15px; font-size: 0.9rem; letter-spacing: 0.5px;">Chargement...</p>
+      </div>
+    </main>
+
+    <style>
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+
+    <nav id="bottom-nav" class="glass-effect">
+      <button class="nav-item active" data-view="dashboard">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" data-view="documents">
+        <i data-lucide="files"></i>
+        <span>Docs</span>
+      </button>
+      <button class="nav-item" data-view="fleet">
+        <i data-lucide="truck"></i>
+        <span>Parc</span>
+      </button>
+      <button class="nav-item scan-btn" data-view="tacho">
+        <div class="scan-icon-wrapper">
+          <i data-lucide="gauge"></i>
+        </div>
+      </button>
+      <button class="nav-item" data-view="payroll">
+        <i data-lucide="calendar-check"></i>
+        <span>Présences</span>
+      </button>
+      <button class="nav-item" data-view="tasks">
+        <i data-lucide="list-todo"></i>
+        <span>Tâches</span>
+      </button>
+      <button class="nav-item" data-view="team">
+        <i data-lucide="users"></i>
+        <span>Équipe</span>
+      </button>
+    </nav>
+
+    <!-- Account / Profile Modal -->
+    <div id="role-modal" class="modal-overlay hidden">
+      <div class="modal-content glass-effect" style="max-width: 400px; padding: 0;">
+        <!-- Header Profil -->
+        <div
+          style="padding: 30px 20px 20px; text-align: center; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--glass-border); position: relative;">
+          <button class="btn-ghost" onclick="window.app.toggleRoleModal()"
+            style="position: absolute; top: 10px; right: 10px; padding: 8px;">
+            <i data-lucide="x"></i>
+          </button>
+          <div class="avatar" id="modal-user-avatar"
+            style="width: 70px; height: 70px; margin: 0 auto 15px auto; font-size: 1.8rem; border: 3px solid var(--primary-color);">
+            AD</div>
+          <h3 id="modal-user-name" style="margin: 0; font-size: 1.25rem;">Mon Profil</h3>
+          <p id="modal-user-role"
+            style="font-size: 0.85rem; opacity: 0.6; margin-top: 5px; color: var(--primary-color); font-weight: 600;">
+          </p>
+          <p id="modal-user-email" style="font-size: 0.75rem; opacity: 0.4; margin-top: 2px; color: var(--text-muted);">
+          </p>
+        </div>
+
+        <div style="padding: 20px; max-height: 50vh; overflow-y: auto;">
+          <!-- Section : Légal & Infos -->
+          <div style="margin-bottom: 25px;">
+            <div
+              style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; opacity: 0.4; letter-spacing: 1px; margin-bottom: 12px; padding-left: 5px;">
+              Informations Légales</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <button class="btn-ghost w-full"
+                style="justify-content: flex-start; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 12px;"
+                onclick="showToast('Chargement des CGV...', 'info')">
+                <i data-lucide="file-text" style="width: 18px; opacity: 0.6;"></i>
+                <span>Conditions Générales (CGV)</span>
+              </button>
+              <button class="btn-ghost w-full"
+                style="justify-content: flex-start; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 12px;"
+                onclick="showToast('Chargement des mentions...', 'info')">
+                <i data-lucide="shield-alert" style="width: 18px; opacity: 0.6;"></i>
+                <span>Mentions Légales</span>
+              </button>
+              <button class="btn-ghost w-full"
+                style="justify-content: flex-start; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 12px;"
+                onclick="showToast('Aide & Support', 'info')">
+                <i data-lucide="help-circle" style="width: 18px; opacity: 0.6;"></i>
+                <span>Support Technique</span>
+              </button>
+              <button class="btn-ghost w-full" onclick="window.app.handleLogout()"
+                style="justify-content: center; margin-top: 20px; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; color: var(--error-color);">
+                <i data-lucide="log-out" style="width: 18px;"></i>
+                <span>Se Déconnecter</span>
+              </button>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- Section : Changement de mode (Si admin/dem) -->
+        <div id="role-switcher-section">
+          <div
+            style="font-size: 0.7rem; font-weight: 700; text-transform: uppercase; opacity: 0.4; letter-spacing: 1px; margin-bottom: 12px; padding-left: 5px;">
+            Changer de mode (Démo)</div>
+          <div class="role-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <button class="role-btn" data-role="admin" style="padding: 15px 5px;">
+              <i data-lucide="shield-check"></i>
+              <span style="font-size: 0.75rem;">Administrateur</span>
+            </button>
+            <button class="role-btn" data-role="collaborator" style="padding: 15px 5px;">
+              <i data-lucide="users"></i>
+              <span style="font-size: 0.75rem;">Collaborateur</span>
+            </button>
+            <button class="role-btn" data-role="driver" style="padding: 15px 5px;">
+              <i data-lucide="id-card"></i>
+              <span style="font-size: 0.75rem;">Chauffeur</span>
+            </button>
+            <button class="role-btn" data-role="mechanic" style="padding: 15px 5px;">
+              <i data-lucide="wrench"></i>
+              <span style="font-size: 0.75rem;">Mécanique</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+
+
+    </div>
+  </div>
+
+  <!-- Add Vehicle Modal -->
+  <div id="add-vehicle-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect">
+      <div class="modal-header">
+        <h3>Nouveau Véhicule</h3>
+        <button class="btn-ghost" id="close-vehicle-modal"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-vehicle-form">
+        <div class="form-group">
+          <label>Immatriculation</label>
+          <input type="text" id="v-plate" class="glass-input" placeholder="AB-123-CD" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Marque</label>
+            <input type="text" id="v-brand" class="glass-input" placeholder="Renault" required>
+          </div>
+          <div class="form-group">
+            <label>Modèle</label>
+            <input type="text" id="v-model" class="glass-input" placeholder="T High" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Kilométrage</label>
+          <input type="number" id="v-mileage" class="glass-input" placeholder="0" required>
+        </div>
+        <div class="form-group">
+          <label>Chauffeur titulaire (Optionnel)</label>
+          <select id="v-driver-select" class="glass-input"></select>
+        </div>
+        <button type="submit" class="btn-primary w-full" style="margin-top: 20px; justify-content: center;">
+          Enregistrer dans le Parc
+        </button>
+      </form>
+    </div>
+  </div>
+  <!-- Add Driver Modal -->
+  <div id="add-driver-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect">
+      <div class="modal-header">
+        <h3>Nouveau Chauffeur</h3>
+        <button class="btn-ghost" id="close-driver-modal"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-driver-form">
+        <div class="form-group">
+          <label>Nom complet</label>
+          <input type="text" id="d-name" class="glass-input" placeholder="Jean Dupont" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="d-email" class="glass-input" placeholder="chauffeur@email.com">
+        </div>
+        <div class="form-group">
+          <label>Téléphone</label>
+          <input type="tel" id="d-phone" class="glass-input" placeholder="06 00 00 00 00">
+        </div>
+        <div class="form-group">
+          <label>Permis (catégories)</label>
+          <div class="license-selector" id="add-d-license-selector">
+            <span class="license-tag" data-val="A">A</span>
+            <span class="license-tag" data-val="B">B</span>
+            <span class="license-tag" data-val="C">C</span>
+            <span class="license-tag" data-val="CE">CE</span>
+            <span class="license-tag" data-val="D">D</span>
+            <span class="license-tag" data-val="DE">DE</span>
+          </div>
+          <input type="hidden" id="d-license" value="">
+        </div>
+        <div class="form-group">
+          <label>Véhicule titulaire (Optionnel)</label>
+          <select id="d-vehicle-select" class="glass-input"></select>
+        </div>
+        <button type="submit" class="btn-primary w-full" style="margin-top: 20px; justify-content: center;">
+          Enregistrer le Chauffeur
+        </button>
+      </form>
+    </div>
+  </div>
+  <!-- Edit Vehicle Modal -->
+  <div id="edit-vehicle-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect">
+      <div class="modal-header">
+        <h3>Modifier le Véhicule</h3>
+        <button class="btn-ghost" id="close-edit-vehicle-modal"><i data-lucide="x"></i></button>
+      </div>
+      <form id="edit-vehicle-form">
+        <input type="hidden" id="edit-v-id">
+        <div class="form-group">
+          <label>Immatriculation</label>
+          <input type="text" id="edit-v-plate" class="glass-input" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Marque</label>
+            <input type="text" id="edit-v-brand" class="glass-input" required>
+          </div>
+          <div class="form-group">
+            <label>Modèle</label>
+            <input type="text" id="edit-v-model" class="glass-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Kilométrage</label>
+          <input type="number" id="edit-v-mileage" class="glass-input" required>
+        </div>
+        <div class="form-group">
+          <label>Chauffeur titulaire</label>
+          <select id="edit-v-driver-select" class="glass-input"></select>
+        </div>
+        <div class="form-group">
+          <label>Statut</label>
+          <select id="edit-v-status" class="glass-input">
+            <option value="active">En route</option>
+            <option value="maintenance">Garage / Maintenance</option>
+          </select>
+        </div>
+        <button type="submit" class="btn-primary w-full" style="margin-top: 20px; justify-content: center;">
+          Enregistrer les modifications
+        </button>
+      </form>
+    </div>
+  </div>
+  <!-- Edit Driver Modal -->
+  <div id="edit-driver-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect">
+      <div class="modal-header">
+        <h3>Modifier le Chauffeur</h3>
+        <button class="btn-ghost" id="close-edit-driver-modal"><i data-lucide="x"></i></button>
+      </div>
+      <form id="edit-driver-form">
+        <input type="hidden" id="edit-d-id">
+        <div class="form-group">
+          <label>Nom complet</label>
+          <input type="text" id="edit-d-name" class="glass-input" required>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="edit-d-email" class="glass-input" placeholder="chauffeur@email.com">
+        </div>
+        <div class="form-group">
+          <label>Téléphone</label>
+          <input type="tel" id="edit-d-phone" class="glass-input" placeholder="06 00 00 00 00">
+        </div>
+        <div class="form-group">
+          <label>Permis (catégories)</label>
+          <div class="license-selector" id="edit-d-license-selector">
+            <span class="license-tag" data-val="A">A</span>
+            <span class="license-tag" data-val="B">B</span>
+            <span class="license-tag" data-val="C">C</span>
+            <span class="license-tag" data-val="CE">CE</span>
+            <span class="license-tag" data-val="D">D</span>
+            <span class="license-tag" data-val="DE">DE</span>
+          </div>
+          <input type="hidden" id="edit-d-license" value="">
+        </div>
+        <div class="form-group">
+          <label>Véhicule titulaire</label>
+          <select id="edit-d-vehicle-select" class="glass-input"></select>
+        </div>
+        <div
+          style="background: rgba(255,255,255,0.02); border-radius: 12px; padding: 15px; margin-top: 15px; border: 1px dashed var(--glass-border);">
+          <div style="font-size: 0.8rem; opacity: 0.6; margin-bottom: 10px;">Accès Application Chauffeur</div>
+          <div id="driver-access-info"
+            style="font-size: 0.85rem; font-weight: 600; color: var(--primary-color); margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+            <i data-lucide="info" style="width: 14px;"></i> Aucun accès configuré
+          </div>
+          <button type="button" class="btn-ghost w-full" id="btn-gen-access"
+            style="border: 1px solid var(--primary-color); color: var(--primary-color); justify-content: center; gap: 8px; font-weight: 600;">
+            <i data-lucide="key-round" style="width: 16px;"></i> Générer un code d'invitation
+          </button>
+        </div>
+        <button type="submit" class="btn-primary w-full" style="margin-top: 20px; justify-content: center;">
+          Enregistrer les modifications
+        </button>
+      </form>
+    </div>
+  </div>
+  <!-- Document Management Modal -->
+  <div id="document-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect">
+      <div class="modal-header">
+        <h3 id="doc-modal-title">Documents</h3>
+        <button class="btn-ghost" id="close-doc-modal"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="doc-upload-section"
+        style="margin-bottom: 20px; padding: 15px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.03); border-radius: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label style="font-size: 0.8rem; opacity: 0.7;">Dossier / Catégorie</label>
+          <select id="doc-folder-select" class="glass-input" onchange="window.app.toggleDocFolderInput(this.value)">
+            <!-- Populated by JS -->
+          </select>
+          <input type="text" id="doc-new-folder" class="glass-input hidden" placeholder="Nom du nouveau dossier..."
+            style="margin-top: 8px;">
+        </div>
+
+        <div class="form-group">
+          <label style="font-size: 0.8rem; opacity: 0.7;">Type de document</label>
+          <select id="doc-type-select" class="glass-input" onchange="window.app.toggleDocCustomInput(this.value)">
+            <option value="" disabled selected>Choisir un type...</option>
+            <option value="Immatriculation">Immatriculation (Carte Grise)</option>
+            <option value="Assurance">Assurance (Carte Verte)</option>
+            <option value="Contrôle / visite">Contrôle / visite (Mines)</option>
+            <option value="Taxes / vignettes">Taxes / vignettes</option>
+            <option value="Entretien">Entretien</option>
+            <option value="Autre">Autre...</option>
+          </select>
+          <input type="text" id="doc-custom-name" class="glass-input hidden"
+            placeholder="Précisez le nom du document..." style="margin-top: 8px;">
+        </div>
+        <div class="form-group">
+          <label style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 5px; display: block;">Date
+            d'expiration</label>
+
+          <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 8px;">
+            <label class="toggle-switch">
+              <input type="checkbox" id="doc-has-expiry" checked onchange="window.app.toggleExpiryInput(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+            <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.2; flex: 1;">
+              Activer si le document a une fin de validité. <br>
+              <span style="font-size: 0.65rem; opacity: 0.7;">(Désactiver pour Carte Grise, Permis
+                définitif...)</span>
+            </div>
+          </div>
+
+          <input type="date" id="doc-expiry-input" class="glass-input">
+        </div>
+        <div class="form-group" style="margin-top: 10px;">
+          <label style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 5px;">Fichier du document</label>
+          <input type="file" id="doc-upload-input" class="glass-input" accept="image/*,application/pdf"
+            style="padding: 8px; height: auto;">
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button type="button" class="btn-ghost" onclick="document.getElementById('doc-camera-input').click()"
+              style="flex:1; justify-content:center;">
+              <i data-lucide="camera" style="width:14px;"></i> Photo/Scan
+            </button>
+          </div>
+          <input type="file" id="doc-camera-input" accept="image/*" capture="environment" style="display:none;">
+        </div>
+
+        <button class="btn-primary" onclick="window.app.saveNewDocument()"
+          style="justify-content: center; width: 100%; margin-top: 10px;">
+          <i data-lucide="save"></i> Enregistrer le document
+        </button>
+      </div>
+    </div>
+
+  </div>
+  </div>
+  </div>
+  </div>
+  </div>
+  <!-- Add Task Modal -->
+  <div id="add-task-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3>Nouvelle Mission</h3>
+        <button class="btn-ghost" id="close-task-modal"><i data-lucide="x"></i></button>
+      </div>
+      <form id="add-task-form">
+        <div class="form-group">
+          <label>Titre de la tournée (ex: Tournée Lundi SUD)</label>
+          <input type="text" id="t-title" class="glass-input" placeholder="ex: Livraison Fruits & Légumes" required>
+        </div>
+
+        <div class="form-group">
+          <label>Feuille de Route / Étapes (1 par ligne)</label>
+          <textarea id="t-stops" class="glass-input" style="height: 100px; padding: 12px;"
+            placeholder="Client Durand - 12 rue...&#10;Intermarché - BP 40...&#10;Dépôt - Retour vide"></textarea>
+          <p style="font-size: 0.65rem; opacity: 0.6; margin-top: 4px;">Indiquez les clients ou points de passage dans
+            l'ordre.</p>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Type</label>
+            <select id="t-type" class="glass-input">
+              <option value="delivery">Livraison</option>
+              <option value="pickup">Enlèvement</option>
+              <option value="maintenance">Maintenance</option>
+              <option value="admin">Administratif</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Date prévue</label>
+            <input type="date" id="t-date" class="glass-input" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Véhicule</label>
+            <select id="t-vehicle" class="glass-input">
+              <option value="">Non assigné</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Chauffeur</label>
+            <select id="t-driver" class="glass-input">
+              <option value="">Non assigné</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Joindre un ou plusieurs documents (BL, Ordre de transport...)</label>
+          <input type="file" id="t-initial-file" class="glass-input" style="padding: 8px; height: auto;" multiple>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
+          <input type="checkbox" id="t-urgent" style="width: 20px; height: 20px; cursor: pointer;">
+          <label for="t-urgent" style="cursor: pointer; font-weight: 600; color: #ef4444;">Priorité Haute</label>
+        </div>
+
+        <button type="submit" class="btn-primary w-full"
+          style="justify-content: center; height: 50px; font-weight: 600; margin-top: 10px;">
+          Créer et Envoyer au Chauffeur
+        </button>
+      </form>
+    </div>
+  </div>
+  <!-- Add Bonus Modal -->
+  <div id="bonus-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3 id="bonus-modal-title">Ajouter une Prime</h3>
+        <button class="btn-ghost" id="close-bonus-modal"><i data-lucide="x"></i></button>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;" id="bonus-options">
+        <button class="btn-ghost glass-effect" onclick="window.app.addBonus('Panier', 13.92)"
+          style="flex-direction: column; padding: 15px; height: auto;">
+          <i data-lucide="utensils" style="margin-bottom: 8px;"></i>
+          <span>Panier</span>
+          <small style="opacity: 0.6;">13.92€</small>
+        </button>
+        <button class="btn-ghost glass-effect" onclick="window.app.addBonus('Nuit', 2.50)"
+          style="flex-direction: column; padding: 15px; height: auto;">
+          <i data-lucide="moon" style="margin-bottom: 8px;"></i>
+          <span>Nuit</span>
+          <small style="opacity: 0.6;">U. (2.50€)</small>
+        </button>
+        <button class="btn-ghost glass-effect" onclick="window.app.addBonus('Découcher', 45.00)"
+          style="flex-direction: column; padding: 15px; height: auto;">
+          <i data-lucide="bed" style="margin-bottom: 8px;"></i>
+          <span>Découcher</span>
+          <small style="opacity: 0.6;">45.00€</small>
+        </button>
+        <button class="btn-ghost glass-effect" onclick="window.app.addBonus('Dimanche', 35.00)"
+          style="flex-direction: column; padding: 15px; height: auto;">
+          <i data-lucide="sun" style="margin-bottom: 8px;"></i>
+          <span>Dimanche</span>
+          <small style="opacity: 0.6;">Forfait</small>
+        </button>
+      </div>
+      <div style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+        <h4 style="font-size: 0.85rem; margin-bottom: 10px; opacity: 0.8;">Prime Exceptionnelle</h4>
+        <form id="custom-bonus-form" style="display: flex; gap: 8px;">
+          <input type="text" id="cb-label" placeholder="Motif" class="glass-input"
+            style="flex: 2; height: 38px; font-size: 0.85rem;" required>
+          <input type="number" id="cb-amount" placeholder="€" class="glass-input"
+            style="flex: 1; height: 38px; font-size: 0.85rem;" step="0.01" required>
+          <button type="submit" class="btn-primary" style="padding: 0 12px; height: 38px;">
+            <i data-lucide="plus"></i>
+          </button>
+        </form>
+      </div>
+      <div id="current-day-bonuses"
+        style="margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+        <!-- List of bonuses for the day -->
+      </div>
+    </div>
+  </div>
+  <!-- Maintenance Modal -->
+  <div id="maintenance-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="maint-modal-title">Carnet d'Entretien</h3>
+        <button class="btn-ghost" id="close-maintenance-modal" type="button"><i data-lucide="x"></i></button>
+      </div>
+
+      <form id="add-maintenance-form"
+        style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid var(--glass-border);">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Type d'intervention</label>
+            <select id="m-type" class="glass-input">
+              <option value="vidange">Vidange / Révision</option>
+              <option value="freins">Freins</option>
+              <option value="pneus">Pneus</option>
+              <option value="moteur">Moteur / Boite</option>
+              <option value="ct">Contrôle Technique</option>
+              <option value="autre">Autre</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Kilométrage</label>
+            <input type="number" id="m-mileage" class="glass-input" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Notes / Détails</label>
+          <textarea id="m-notes" class="glass-input" style="height: 60px; padding: 10px;"
+            placeholder="Détails des travaux effectués..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>Photo / Justificatif (Optionnel)</label>
+          <input type="file" id="m-photo" class="glass-input" accept="image/*" style="padding: 8px;">
+        </div>
+        <button type="submit" class="btn-primary w-full"
+          style="justify-content: center; height: 40px; margin-top: 10px;">
+          Enregistrer l'intervention
+        </button>
+      </form>
+
+      <div id="maintenance-history" style="margin-top: 20px; max-height: 400px; overflow-y: auto; padding-right: 5px;">
+        <!-- List of maintenance logs -->
+      </div>
+    </div>
+  </div><!-- Fin #maintenance-modal -->
+
+  <!-- Edit Document Modal -->
+  <div id="edit-doc-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Modifier le Document</h3>
+        <button class="btn-ghost" onclick="document.getElementById('edit-doc-modal').classList.add('hidden')">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <form onsubmit="window.app.saveEditDoc(event)">
+        <input type="hidden" id="edit-doc-id">
+        <div class="form-group" style="margin-top: 15px;">
+          <label>Nom du document</label>
+          <input type="text" id="edit-doc-name" class="glass-input" required>
+        </div>
+        <div class="form-group" style="margin-top: 15px;">
+          <label>Dossier / Catégorie</label>
+          <select id="edit-doc-folder" class="glass-input" onchange="window.app.toggleEditDocFolder(this.value)">
+            <!-- Populated by JS -->
+          </select>
+          <input type="text" id="edit-doc-new-folder" class="glass-input hidden" placeholder="Nom du nouveau dossier"
+            style="margin-top: 5px;">
+        </div>
+        <div class="form-group" style="margin-top: 15px;">
+          <label style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 5px; display: block;">Date d'expiration</label>
+          <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 8px;">
+            <label class="toggle-switch">
+              <input type="checkbox" id="edit-doc-has-expiry" onchange="window.app.toggleEditExpiryInput(this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+            <div style="font-size: 0.75rem; color: var(--text-muted); line-height: 1.2; flex: 1;">
+              Définir une date d'expiration ?
+            </div>
+          </div>
+          <input type="date" id="edit-doc-expiry" class="glass-input">
+        </div>
+        <div class="form-group" style="margin-top: 15px;">
+          <label>Remplacer le fichier (Optionnel)</label>
+          <input type="file" id="edit-doc-file" accept="image/*,application/pdf" style="display: none;">
+          <input type="file" id="edit-doc-camera-file" accept="image/*" capture="environment" style="display: none;">
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn-ghost w-full" onclick="document.getElementById('edit-doc-file').click()"
+              style="flex:1;"
+              style="border: 1px dashed var(--glass-border); background: rgba(255,255,255,0.03); border-radius: 12px; height: 45px; justify-content: center;">
+              <i data-lucide="upload-cloud"></i> Choisir un nouveau fichier
+            </button>
+            <div id="edit-doc-file-name"
+              style="font-size: 0.75rem; color: var(--primary-color); margin-top: 5px; text-align: center;"></div>
+          </div>
+          <button type="submit" class="btn-primary w-full" style="margin-top: 20px; justify-content: center;">
+            Enregistrer les modifications
+          </button>
+      </form>
+    </div>
+  </div>
+
+
+
+
+  <!-- Document Preview Modal -->
+  <div id="preview-doc-modal" class="modal-overlay hidden" style="z-index: 9999;">
+    <div class="modal-content glass-effect"
+      style="max-width: 90vw; height: 90vh; padding: 0; display: flex; flex-direction: column; overflow: hidden;">
+      <div class="modal-header" style="z-index: 10;">
+        <h3 id="preview-doc-title"
+          style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;">Aperçu du document
+        </h3>
+        <button class="btn-ghost" onclick="document.getElementById('preview-doc-modal').classList.add('hidden')">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div id="preview-content-area"
+        style="flex: 1; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; overflow: auto; position: relative;">
+        <!-- Content injected here -->
+        <iframe id="preview-frame" style="width: 100%; height: 100%; border: none; display: none;"></iframe>
+        <img id="preview-image" style="max-width: 100%; max-height: 100%; object-fit: contain; display: none;">
+        <div id="preview-fallback" style="text-align: center; color: white; display: none;">
+          <i data-lucide="file-x" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: 15px;"></i>
+          <p>Aperçu indisponible pour ce fichier.</p>
+          <button id="preview-download-btn" class="btn-primary" style="margin-top: 15px;">
+            <i data-lucide="download"></i> Télécharger
+          </button>
+        </div>
+        <div id="preview-loader"
+          style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); z-index: 5;">
+          <div class="loader-spinner"
+            style="width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite;">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Driver Doc Type Selection Modal -->
+  <div id="driver-doc-type-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect" style="max-width: 400px;">
+      <div class="modal-header">
+        <h3>Nouveau Document</h3>
+        <button class="btn-ghost" onclick="document.getElementById('driver-doc-type-modal').classList.add('hidden')">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div style="margin-top: 20px;">
+        <div class="form-group">
+          <label style="font-size: 0.8rem; opacity: 0.7;">Date d'expiration (obligatoire)</label>
+          <input type="date" id="driver-doc-expiry" class="glass-input">
+        </div>
+
+        <label style="font-size: 0.8rem; opacity: 0.7; display: block; margin-top: 15px;">Sélectionnez le type pour
+          envoyer</label>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px;">
+          <button class="role-btn" onclick="window.app.selectDocType('Permis de Conduire')">
+            <i data-lucide="credit-card"></i>
+            <span>Permis</span>
+          </button>
+          <button class="role-btn" onclick="window.app.selectDocType(' ADR / Matières Dang.')">
+            <i data-lucide="alert-triangle"></i>
+            <span>ADR</span>
+          </button>
+          <button class="role-btn" onclick="window.app.selectDocType('FIMO / FCO')">
+            <i data-lucide="graduation-cap"></i>
+            <span>FIMO/FCO</span>
+          </button>
+          <button class="role-btn" onclick="window.app.selectDocType('CACES')">
+            <i data-lucide="hard-hat"></i>
+            <span>CACES</span>
+          </button>
+          <button class="role-btn" onclick="window.app.selectDocType('Visite Médicale')">
+            <i data-lucide="heart-pulse"></i>
+            <span>V. Médicale</span>
+          </button>
+          <button class="role-btn" onclick="window.app.selectDocType('Autre Document')">
+            <i data-lucide="file-plus"></i>
+            <span>Autre</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mission Detail Modal -->
+  <div id="mission-detail-modal" class="modal-overlay hidden">
+    <div class="modal-content glass-effect"
+      style="max-width: 600px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div id="m-detail-type-icon" class="avatar"
+            style="width: 40px; height: 40px; font-size: 1.2rem; background: var(--glass-bg); color: var(--primary-color);">
+            <i data-lucide="truck"></i>
+          </div>
+          <div>
+            <h3 id="m-detail-title">Détails de la Mission</h3>
+            <span id="m-detail-date" style="font-size: 0.75rem; opacity: 0.6;"></span>
+          </div>
+        </div>
+        <button class="btn-ghost" id="close-mission-detail"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="modal-body"
+        style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+        <!-- Tasks / Documents List -->
+        <div id="m-roadmap-section">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 0.8rem; font-weight: 700; opacity: 0.8;">Suivi Documents / Tâches</span>
+            <div id="m-roadmap-progress" style="font-size: 0.75rem; font-weight: 700; color: var(--primary-color);">0/0
+            </div>
+          </div>
+          <div id="m-roadmap-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Stops injected here -->
+          </div>
+        </div>
+
+        <div style="height: 1px; background: var(--glass-border); opacity: 0.5;"></div>
+
+        <!-- Instructions Section (Internal Notes) -->
+        <div id="m-notes-box" class="glass-effect"
+          style="padding: 12px; border-radius: 12px; border-left: 4px solid var(--warning-color);">
+          <div
+            style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; opacity: 0.7;">
+            Notes & Consignes</div>
+          <div id="m-detail-notes" style="font-size: 0.85rem; line-height: 1.4; white-space: pre-wrap;"></div>
+        </div>
+
+        <!-- Exploitation Docs -->
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 0.8rem; font-weight: 700; opacity: 0.8;">Documents Exploitation (Admin)</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn-ghost" onclick="document.getElementById('m-admin-upload').click()"
+                style="font-size: 0.75rem; color: var(--primary-color); padding: 5px;">
+                <i data-lucide="plus" style="width: 14px;"></i> Ajouter
+                <input type="file" id="m-admin-upload" style="display: none;"
+                  onchange="window.app.uploadMissionFiles(this, 'admin')" multiple>
+                <input type="file" id="m-admin-camera-upload" accept="image/*" capture="environment"
+                  style="display: none;" onchange="window.app.uploadMissionFiles(this, 'admin')">
+              </button>
+              <button class="btn-ghost" onclick="document.getElementById('m-admin-camera-upload').click()"
+                style="font-size: 0.75rem; color: var(--primary-color); padding: 5px;">
+                <i data-lucide="camera" style="width: 14px;"></i> Photo
+              </button>
+            </div>
+          </div>
+          <div id="m-admin-files-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Files injected here -->
+          </div>
+        </div>
+
+        <!-- Driver Proofs -->
+        <div
+          style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 16px; border: 1px dashed var(--glass-border);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="font-size: 0.8rem; font-weight: 700; opacity: 0.8;">Preuves de livraison (Chauffeur)</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn-ghost" onclick="document.getElementById('m-driver-upload').click()"
+                style="font-size: 0.75rem; color: var(--success-color); padding: 5px;">
+                <i data-lucide="camera" style="width: 14px;"></i> Scanner / Photo
+                <input type="file" id="m-driver-upload" style="display: none;"
+                  onchange="window.app.uploadMissionFiles(this, 'driver')" multiple>
+                <input type="file" id="m-driver-camera-upload" accept="image/*" capture="environment"
+                  style="display: none;" onchange="window.app.uploadMissionFiles(this, 'driver')">
+              </button>
+              <button class="btn-ghost" onclick="document.getElementById('m-driver-camera-upload').click()"
+                style="font-size: 0.75rem; color: var(--primary-color); padding: 5px;">
+                <i data-lucide="camera" style="width: 14px;"></i> Photo
+              </button>
+            </div>
+          </div>
+          <div id="m-driver-files-list" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Proofs injected here -->
+          </div>
+        </div>
+
+        <!-- Driver Feedback -->
+        <div id="m-feedback-section" class="form-group">
+          <label style="font-size: 0.75rem; opacity: 0.7;">Compte-rendu final (Chauffeur)</label>
+          <textarea id="m-driver-report" class="glass-input" style="height: 60px; font-size: 0.85rem;"
+            placeholder="Une remarque sur la livraison ?"></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer"
+        style="padding: 15px; border-top: 1px solid var(--glass-border); display: flex; flex-direction: column; gap: 10px;">
+        <div id="m-detail-footer-info" style="font-size: 0.75rem; opacity: 0.6; text-align: center;"></div>
+        <button class="btn-primary w-full" id="m-detail-complete-btn"
+          style="height: 48px; justify-content: center; font-weight: 700;">
+          <i data-lucide="check-circle"></i> Clôturer la Mission
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contact Modal -->
+  <div id="contact-modal" class="modal-overlay hidden" style="z-index: 10001;">
+    <div class="modal-content glass-effect" style="max-width: 350px; text-align: center; padding: 25px;">
+      <div class="avatar" id="contact-avatar"
+        style="width: 60px; height: 60px; margin: 0 auto 15px auto; font-size: 1.5rem; background: var(--primary-color); color: white;">
+        ?</div>
+      <h3 id="contact-name" style="margin-bottom: 5px;">Contact</h3>
+      <p style="font-size: 0.85rem; opacity: 0.7; margin-bottom: 25px;">Choisissez un mode de communication</p>
+
+      <div style="display: flex; flex-direction: column; gap: 15px;">
+        <div id="contact-phone-box" class="glass-effect"
+          style="padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <span id="contact-phone-display"
+            style="font-weight: 700; color: var(--success-color); font-size: 1.1rem;">-</span>
+          <div style="display: flex; gap: 8px;">
+            <a id="contact-call-link" href="#" class="btn-primary"
+              style="flex: 1; justify-content: center; background: var(--success-color); border-color: var(--success-color); text-decoration: none; height: 40px; font-size: 0.85rem;">
+              <i data-lucide="phone" style="width: 16px;"></i> Appeler
+            </a>
+            <button class="btn-ghost"
+              onclick="window.app.copyToClipboard(document.getElementById('contact-phone-display').textContent, 'Numéro copié')"
+              style="padding: 0 12px; height: 40px; border: 1px solid var(--glass-border); border-radius: 10px;">
+              <i data-lucide="copy" style="width: 16px;"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="contact-email-box" class="glass-effect"
+          style="padding: 12px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px;">
+          <span id="contact-email-display"
+            style="font-weight: 600; font-size: 0.9rem; opacity: 0.9; word-break: break-all;">-</span>
+          <div style="display: flex; gap: 8px;">
+            <a id="contact-email-link" href="#" class="btn-primary"
+              style="flex: 1; justify-content: center; text-decoration: none; height: 40px; font-size: 0.85rem;">
+              <i data-lucide="mail" style="width: 16px;"></i> Email
+            </a>
+            <button class="btn-ghost"
+              onclick="window.app.copyToClipboard(document.getElementById('contact-email-display').textContent, 'Email copié')"
+              style="padding: 0 12px; height: 40px; border: 1px solid var(--glass-border); border-radius: 10px;">
+              <i data-lucide="copy" style="width: 16px;"></i>
+            </button>
+          </div>
+        </div>
+
+        <button class="btn-ghost" onclick="document.getElementById('contact-modal').classList.add('hidden')"
+          style="margin-top: 5px; font-size: 0.9rem;">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Payroll Detail Modal -->
+  <div id="payroll-detail-modal" class="modal-overlay hidden" style="z-index: 10002;">
+    <div class="modal-content glass-effect"
+      style="max-width: 720px; padding: 0; display: flex; flex-direction: column;">
+      <div
+        style="padding: 18px; border-bottom: 1px solid var(--glass-border-color); display:flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <div style="min-width: 0;">
+          <h3 id="payroll-detail-title"
+            style="margin: 0; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></h3>
+          <div id="payroll-detail-subtitle" style="opacity: 0.65; font-size: 0.85rem; margin-top: 4px;"></div>
+        </div>
+        <button class="btn-ghost" onclick="window.app.closePayrollDetail()" style="padding: 8px 10px;">Fermer</button>
+      </div>
+
+      <div id="payroll-detail-body" style="padding: 16px; max-height: 70vh; overflow: auto;"></div>
+
+      <div
+        style="padding: 14px 16px; border-top: 1px solid var(--glass-border-color); display:flex; justify-content: space-between; align-items:center; gap: 10px;">
+        <div style="display:flex; gap: 8px;">
+          <button class="btn-ghost" onclick="window.app.shiftPayrollDetailMonth(-1)" title="Mois précédent">
+            <i data-lucide="chevron-left" style="width: 18px; height: 18px;"></i>
+          </button>
+          <button class="btn-ghost" onclick="window.app.shiftPayrollDetailMonth(1)" title="Mois suivant">
+            <i data-lucide="chevron-right" style="width: 18px; height: 18px;"></i>
+          </button>
+        </div>
+        <button class="btn-primary" onclick="window.app.downloadPayrollDetailReport()">
+          <i data-lucide="download" style="width: 18px; height: 18px;"></i>
+          Télécharger le PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- History Modal (Full Log) -->
+  <div id="history-modal" class="modal-overlay hidden" style="z-index: 10001;">
+    <div class="modal-content glass-effect"
+      style="max-width: 450px; padding: 0; display: flex; flex-direction: column;">
+      <div
+        style="padding: 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+          <i data-lucide="activity" style="color: var(--primary-color);"></i> Journal d'Activité
+        </h3>
+        <button class="btn-ghost" onclick="document.getElementById('history-modal').classList.add('hidden')"
+          style="padding: 5px;">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div id="history-full-list" style="padding: 10px; max-height: 60vh; overflow-y: auto;">
+        <!-- Filled by JS -->
+      </div>
+      <div style="padding: 15px; border-top: 1px solid var(--glass-border); text-align: center;">
+        <p style="font-size: 0.75rem; opacity: 0.5; margin: 0;">Affichage des 100 derniers événements</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Confirmation Modal -->
+  <div id="confirmation-modal" class="modal-overlay hidden" style="z-index: 10000;">
+    <div class="modal-content glass-effect" style="max-width: 400px; text-align: center; padding: 30px;">
+      <div style="margin-bottom: 20px;">
+        <i data-lucide="alert-circle"
+          style="width: 48px; height: 48px; color: var(--warning-color); margin: 0 auto;"></i>
+      </div>
+      <h3 style="margin-bottom: 10px; font-size: 1.2rem;">Confirmation</h3>
+      <p id="confirm-message" style="color: var(--text-secondary); margin-bottom: 25px; line-height: 1.5;">Êtes-vous sûr
+        ?</p>
+
+      <div style="display: flex; gap: 15px; justify-content: center;">
+        <button id="confirm-cancel-btn" class="btn-back" style="width: 120px; justify-content: center;">Retour</button>
+        <button id="confirm-ok-btn" class="btn-primary"
+          style="background: var(--error-color); border-color: var(--error-color); width: 120px; justify-content: center;">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  </div><!-- Fin #app -->
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
