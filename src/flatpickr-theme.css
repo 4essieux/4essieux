@@ -1,0 +1,65 @@
+/* --- Flatpickr (Modern Date Picker) Customization --- */
+.flatpickr-calendar {
+    background: var(--surface-color) !important;
+    border: 1px solid var(--glass-border) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+    font-family: 'Inter', sans-serif !important;
+    z-index: 99999 !important;
+    /* Ensure it is above modals */
+}
+
+.flatpickr-day.selected,
+.flatpickr-day.startRange,
+.flatpickr-day.endRange,
+.flatpickr-day.selected.inRange,
+.flatpickr-day.startRange.inRange,
+.flatpickr-day.endRange.inRange,
+.flatpickr-day:hover,
+.flatpickr-day:focus {
+    background: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.flatpickr-months .flatpickr-month {
+    background: var(--surface-color) !important;
+    color: var(--text-primary) !important;
+    fill: var(--text-primary) !important;
+}
+
+.flatpickr-current-month .flatpickr-monthDropdown-months,
+.flatpickr-current-month input.cur-year {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+.flatpickr-day {
+    color: var(--text-secondary) !important;
+}
+
+.flatpickr-day.flatpickr-disabled,
+.flatpickr-day.flatpickr-disabled:hover {
+    color: var(--text-muted) !important;
+}
+
+/* Fix input appearance generally */
+.flatpickr-input {
+    background-color: var(--surface-color) !important;
+    cursor: pointer !important;
+    color: var(--text-primary) !important;
+}
+
+/* Specific override for Payroll Header Date Input */
+/* Specific override for Payroll Header Date Input */
+input.payroll-date-input,
+.flatpickr-input.payroll-date-input {
+    background-color: transparent !important;
+    color: white !important;
+    text-align: center !important;
+    border: none !important;
+    font-weight: 600 !important;
+    width: 140px !important;
+    /* Slightly wider for long months */
+    padding: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
